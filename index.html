@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="my">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Video App</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: "Noto Sans Myanmar", "Padauk", system-ui, sans-serif;
+    background: #0f1115; color: #f2f3f5; min-height: 100vh;
+    -webkit-tap-highlight-color: transparent;
+  }
+  header {
+    position: sticky; top: 0; z-index: 5;
+    background: rgba(15,17,21,.92); backdrop-filter: blur(8px);
+    padding: 14px 16px 10px; border-bottom: 1px solid #23262d;
+  }
+  header h1 { font-size: 20px; font-weight: 700; }
+  #search {
+    width: 100%; margin-top: 10px; padding: 10px 12px; border-radius: 10px;
+    border: 1px solid #2b2f38; background: #171a20; color: #f2f3f5; font-size: 15px;
+  }
+  #chips { display: flex; gap: 8px; overflow-x: auto; padding: 10px 16px 2px; scrollbar-width: none; }
+  #chips::-webkit-scrollbar { display: none; }
+  .chip {
+    flex: 0 0 auto; padding: 6px 14px; border-radius: 999px; font-size: 14px;
+    border: 1px solid #2b2f38; background: #171a20; color: #cfd3da; cursor: pointer;
+  }
+  .chip.on { background: #e8b93c; border-color: #e8b93c; color: #141414; font-weight: 700; }
+  #grid {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 12px; padding: 14px 16px 28px;
+  }
+  .card { background: #171a20; border: 1px solid #23262d; border-radius: 14px; overflow: hidden; cursor: pointer; }
+  .card:active { transform: scale(.98); }
+  .thumb { position: relative; aspect-ratio: 16/10; background: linear-gradient(135deg,#262b36,#171a20); display:flex; align-items:center; justify-content:center; }
+  .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  .thumb .play { font-size: 30px; color: #e8b93c; z-index: 1; text-shadow: 0 2px 10px rgba(0,0,0,.7); }
+  .dur { position: absolute; right: 6px; bottom: 6px; z-index: 1; background: rgba(0,0,0,.75); color:#fff; font-size: 12px; padding: 2px 7px; border-radius: 6px; }
+  .card .t { padding: 9px 10px 11px; font-size: 14px; line-height: 1.45; }
+  #empty { padding: 60px 24px; text-align: center; color: #9aa1ad; font-size: 16px; line-height: 1.8; }
+  /* Player view */
+  #playerView { display: none; }
+  #playerView .bar { display: flex; align-items: center; gap: 10px; padding: 12px 14px; }
+  #backBtn { background: #23262d; color: #f2f3f5; border: none; border-radius: 10px; padding: 9px 14px; font-size: 15px; cursor: pointer; }
+  #fsBtn { margin-left: auto; flex: 0 0 auto; background: #23262d; color: #f2f3f5; border: none; border-radius: 10px; padding: 9px 14px; font-size: 15px; cursor: pointer; }
+  #pTitle { font-size: 16px; font-weight: 600; line-height: 1.4; }
+  .frameWrap { position: relative; width: 100%; aspect-ratio: 16/9; background: #000; }
+  .frameWrap.portrait { aspect-ratio: 9/16; max-height: 82vh; margin: 0 auto; }
+  .frameWrap iframe { position: absolute; inset: 0; width: 100%; height: 100%; border: 0; }
+  /* Age gate */
+  #gate { position: fixed; inset: 0; z-index: 50; background: #0f1115; display: none; align-items: center; justify-content: center; padding: 24px; }
+  #gate .box { text-align: center; max-width: 340px; }
+  #gate .big { font-size: 44px; font-weight: 800; color: #e8b93c; border: 3px solid #e8b93c; border-radius: 50%; width: 92px; height: 92px; line-height: 86px; margin: 0 auto 16px; }
+  #gate p { color: #cfd3da; line-height: 1.8; margin-bottom: 20px; }
+  #gate button { width: 100%; padding: 13px; border-radius: 12px; border: none; font-size: 16px; cursor: pointer; margin-top: 8px; }
+  #yesBtn { background: #e8b93c; color: #141414; font-weight: 700; }
+  #noBtn { background: #23262d; color: #cfd3da; }
+</style>
+</head>
+<body>
+
+<div id="gate">
+  <div class="box">
+    <div class="big">18+</div>
+    <p>ဒီ App ထဲမှာ အသက် ၁၈ နှစ်အထက် အတွက်သာ ဖြစ်တဲ့ Video တွေ ပါပါတယ်။<br>အသက် ပြည့်ပြီဆိုမှ ဝင်ပါ။</p>
+    <button id="yesBtn">ဟုတ်ကဲ့၊ ၁၈ နှစ် ပြည့်ပါပြီ — ဝင်မယ်</button>
+    <button id="noBtn">မဝင်ဘူး — ပြန်ထွက်မယ်</button>
+  </div>
+</div>
+
+<div id="listView">
+  <header>
+    <h1 id="appName">Video App</h1>
+    <input id="search" type="search" placeholder="Video ရှာရန်…">
+  </header>
+  <div id="chips"></div>
+  <div id="grid"></div>
+  <div id="empty" style="display:none">Video မရှိသေးပါ။<br>မကြာခင် တင်ပေးပါမယ်။</div>
+</div>
+
+<div id="playerView">
+  <div class="bar">
+    <button id="backBtn">← ပြန်ထွက်</button>
+    <div id="pTitle"></div>
+    <button id="fsBtn">⛶ Fullscreen</button>
+  </div>
+  <div class="frameWrap"><iframe id="player" allowfullscreen allow="autoplay; fullscreen" sandbox="allow-scripts allow-same-origin allow-presentation allow-forms"></iframe></div>
+</div>
+
+<script src="videos.js"></script>
+<script>
+  var tg = window.Telegram && window.Telegram.WebApp;
+  if (tg) { tg.ready(); tg.expand(); }
+
+  var cfg = window.APP_CONFIG || {};
+  document.getElementById('appName').textContent = cfg.appName || 'Video App';
+  document.title = cfg.appName || 'Video App';
+
+  // Age gate
+  var gate = document.getElementById('gate');
+  if (cfg.ageGate && !sessionStorage.getItem('age_ok')) {
+    gate.style.display = 'flex';
+  }
+  document.getElementById('yesBtn').onclick = function () {
+    sessionStorage.setItem('age_ok', '1'); gate.style.display = 'none';
+  };
+  document.getElementById('noBtn').onclick = function () {
+    if (tg) tg.close(); else gate.style.display = 'none';
+  };
+
+  var videos = window.VIDEOS || [];
+  var grid = document.getElementById('grid');
+  var empty = document.getElementById('empty');
+  var chips = document.getElementById('chips');
+  var curCat = 'all', curQ = '';
+
+  // Category chips
+  var cats = ['all'];
+  videos.forEach(function (v) { if (v.category && cats.indexOf(v.category) < 0) cats.push(v.category); });
+  cats.forEach(function (c) {
+    var b = document.createElement('button');
+    b.className = 'chip' + (c === 'all' ? ' on' : '');
+    b.textContent = (c === 'all') ? 'အားလုံး' : c;
+    b.onclick = function () {
+      curCat = c;
+      chips.querySelectorAll('.chip').forEach(function (x) { x.classList.remove('on'); });
+      b.classList.add('on'); render();
+    };
+    chips.appendChild(b);
+  });
+  if (cats.length <= 1) chips.style.display = 'none';
+
+  document.getElementById('search').addEventListener('input', function (e) {
+    curQ = e.target.value.trim().toLowerCase(); render();
+  });
+
+  function render() {
+    grid.innerHTML = '';
+    var n = 0;
+    videos.forEach(function (v, i) {
+      if (curCat !== 'all' && v.category !== curCat) return;
+      if (curQ && (v.title || '').toLowerCase().indexOf(curQ) < 0) return;
+      n++;
+      var card = document.createElement('div');
+      card.className = 'card';
+      card.innerHTML =
+        '<div class="thumb">' +
+          (v.thumb ? '<img src="' + v.thumb + '" alt="">' : '') +
+          '<div class="play">▶</div>' +
+          (v.duration ? '<div class="dur">' + v.duration + '</div>' : '') +
+        '</div>' +
+        '<div class="t">' + (v.title || '') + (v.size ? ' · ' + v.size : '') + '</div>';
+      card.onclick = function () { openPlayer(i); };
+      grid.appendChild(card);
+    });
+    empty.style.display = n ? 'none' : 'block';
+  }
+
+  var listView = document.getElementById('listView');
+  var playerView = document.getElementById('playerView');
+  var player = document.getElementById('player');
+
+  function openPlayer(i) {
+    var v = videos[i];
+    document.getElementById('pTitle').textContent = (v.title || '') + (v.size ? ' · ' + v.size : '');
+    document.querySelector('.frameWrap').classList.toggle('portrait', !!v.portrait);
+    player.src = v.embed;
+    try { history.replaceState(null, '', '#v=' + vidId(v)); } catch (e) {}
+    listView.style.display = 'none';
+    playerView.style.display = 'block';
+    window.scrollTo(0, 0);
+    if (tg && tg.BackButton) {
+      tg.BackButton.show();
+      tg.BackButton.onClick(closePlayer);
+    }
+  }
+  function closePlayer() {
+    try { if (tg && tg.exitFullscreen) tg.exitFullscreen(); } catch (e) {}
+    try { if (document.fullscreenElement) document.exitFullscreen(); } catch (e) {}
+    player.src = '';
+    try { history.replaceState(null, '', location.pathname); } catch (e) {}
+    playerView.style.display = 'none';
+    listView.style.display = 'block';
+    if (tg && tg.BackButton) tg.BackButton.hide();
+  }
+  document.getElementById('backBtn').onclick = closePlayer;
+  document.getElementById('fsBtn').onclick = function () {
+    try { if (tg && tg.requestFullscreen) { tg.requestFullscreen(); return; } } catch (e) {}
+    var w = document.querySelector('.frameWrap');
+    try { if (w && w.requestFullscreen) { w.requestFullscreen(); return; } } catch (e) {}
+    try { if (document.documentElement.requestFullscreen) document.documentElement.requestFullscreen(); } catch (e) {}
+  };
+
+  function vidId(v) { return (v.embed || '').split('/').filter(Boolean).pop(); }
+  function openFromHash() {
+    var m = (location.hash || '').match(/v=([A-Za-z0-9]+)/);
+    if (!m) return;
+    for (var i = 0; i < videos.length; i++) { if (vidId(videos[i]) === m[1]) { openPlayer(i); return; } }
+  }
+
+  render();
+  openFromHash();
+</script>
+</body>
+</html>
